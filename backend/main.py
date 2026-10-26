@@ -1,4 +1,5 @@
 import os
+import urllib.request
 from typing import Optional
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -6,12 +7,11 @@ import numpy as np
 import pandas as pd
 
 app = FastAPI(
-    title="Kepler Exoplanet Visual Analytics API",
+    title="Kepler Exoplanet Visual Analytics Dashboard",
     description="Backend API serving pre-aggregated Kepler light-curve features and time-series endpoints.",
     version="5.0.0"
 )
 
-# Enable CORS for localhost and external deployed frontends
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -20,41 +20,47 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-DATA_PATH = os.path.join("data", "Exoplanet_Train.csv")
+DATA_DIR = "data"
+DATA_PATH = os.path.join(DATA_DIR, "Exoplanet_Train.csv")
+# Replace this with your actual GitHub Release direct download URL
+DATA_URL = "https://github.com/kirraorn/CIS4930-A2/releases/download/v1.0.0/Exoplanet_Train.csv"
+
 raw_df: Optional[pd.DataFrame] = None
 summary_df: Optional[pd.DataFrame] = None
 
 
 @app.on_event("startup")
 def load_and_process_data():
-    """Load Kepler CSV dataset and precompute robust visual metrics."""
+    """Load Kepler CSV dataset, auto-downloading from GitHub Release if missing."""
     global raw_df, summary_df
-    file_to_load = DATA_PATH if os.path.exists(DATA_PATH) else "Exoplanet_Train.csv"
     
-    if not os.path.exists(file_to_load):
-        print(f"Warning: {file_to_load} not found. Please ensure dataset is present.")
-        return
+    os.makedirs(DATA_DIR, exist_ok=True)
+    
+    if not os.path.exists(DATA_PATH):
+        print(f"Dataset not found locally. Downloading from GitHub Release asset...")
+        try:
+            urllib.request.urlretrieve(DATA_URL, DATA_PATH)
+            print("Download complete!")
+        except Exception as e:
+            print(f"Failed to auto-download dataset: {e}")
+            return
 
-    print(f"Loading Kepler dataset from {file_to_load}...")
-    raw_df = pd.read_csv(file_to_load)
-
+    print(f"Loading Kepler dataset from {DATA_PATH}...")
+    raw_df = pd.read_csv(DATA_PATH)
+    
+    # Rest of your feature engineering logic...
     flux_cols = [c for c in raw_df.columns if c.startswith("FLUX.")]
     labels = raw_df["LABEL"].astype(int).values
     flux_matrix = raw_df[flux_cols].values
 
-    # Feature Engineering
     means = np.mean(flux_matrix, axis=1)
     stds = np.std(flux_matrix, axis=1)
     mins = np.min(flux_matrix, axis=1)
-
-    # Avoid zero division
     stds_safe = np.where(stds == 0, 1.0, stds)
 
-    # Calculate normalized features
     noise_level = stds
     dip_scores = (means - mins) / stds_safe
 
-    # Clip 99th percentile extreme outliers for visualization stability
     noise_cutoff = np.percentile(noise_level, 99)
     dip_cutoff = np.percentile(dip_scores, 99)
 
