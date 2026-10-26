@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kepler Exoplanet Visual Analytics</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- D3.js v7 -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            background-color: #07090e;
+            color: #e2e8f0;
+            font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+        }
+        .tooltip {
+            position: absolute;
+            pointer-events: none;
+            background: rgba(13, 17, 23, 0.95);
+            border: 1px solid rgba(99, 102, 241, 0.4);
+            color: #f8fafc;
+            padding: 8px 12px;
+            font-size: 11px;
+            font-family: ui-monospace, monospace;
+            border-radius: 4px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.7);
+            z-index: 50;
+        }
+        .brush .selection {
+            fill: #6366f1;
+            fill-opacity: 0.18;
+            stroke: #818cf8;
+            stroke-width: 1px;
+            stroke-dasharray: 3px;
+        }
+        .instrument-panel {
+            background: #0d1117;
+            border: 1px solid #21262d;
+        }
+    </style>
+</head>
+<body class="min-h-screen antialiased flex flex-col justify-between selection:bg-indigo-500 selection:text-white">
+
+    <!-- Top Instrument Header -->
+    <header class="border-b border-[#21262d] bg-[#07090e]/90 backdrop-blur px-8 py-5 sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+                <div class="flex items-center gap-3">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <h1 class="text-sm font-mono tracking-widest uppercase text-indigo-400 font-semibold">
+                        Kirra Orndorff // Data Visualization
+                    </h1>
+                </div>
+                <h2 class="text-xl font-bold tracking-tight text-white mt-1">
+                    Exoplanet Discovery Dashboard
+                </h2>
+            </div>
+            
+            <!-- Live Telemetry / Reset Controls -->
+            <div class="flex items-center gap-3 font-mono">
+                <div class="instrument-panel px-3.5 py-1.5 rounded text-xs text-slate-300 flex items-center gap-2">
+                    <span class="text-slate-500">STARS SELECTED:</span>
+                    <strong id="active-count" class="text-indigo-400">0</strong>
+                    <span class="text-slate-600">/</span>
+                    <span id="total-count" class="text-slate-400">0</span>
+                </div>
+                <button id="reset-filter-btn" class="text-xs bg-[#21262d] hover:bg-indigo-600 hover:text-white text-slate-200 px-4 py-1.5 rounded transition font-medium border border-[#30363d]">
+                    RESET FILTER
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Workspace Grid -->
+    <main class="max-w-7xl mx-auto px-8 py-8 grid grid-cols-1 lg:grid-cols-12 gap-6 w-full my-auto">
+
+        <!-- Left Column: Overview & Distribution (7 Cols) -->
+        <div class="lg:col-span-7 flex flex-col gap-6">
+            
+            <!-- View 1: Scatterplot Instrument -->
+            <section class="instrument-panel rounded-lg p-5 shadow-2xl flex flex-col justify-between">
+                <div>
+                    <div class="flex justify-between items-baseline mb-1">
+                        <h3 class="text-xs font-mono uppercase tracking-wider text-slate-300 font-semibold">
+                            [View 01] Stellar Noise vs. Transit Depth Signal
+                        </h3>
+                        <span class="text-[11px] font-mono text-slate-500">Interactive 2D Projection</span>
+                    </div>
+                    <p class="text-xs text-slate-400 mb-3">
+                        Question: <em>Which targets isolate clean, low-noise profiles paired with significant starlight dimming?</em>
+                    </p>
+
+                    <div class="flex items-center justify-between bg-[#07090e] px-3 py-1.5 rounded border border-[#21262d] text-[11px] font-mono mb-2">
+                        <span class="text-slate-500">Drag box to brush subset • Click marker to inspect</span>
+                        <div class="flex items-center gap-3">
+                            <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-indigo-500 inline-block"></span> Exoplanet Host</span>
+                            <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-slate-600 inline-block"></span> Standard Star</span>
+                        </div>
+                    </div>
+
+                    <div id="scatterplot-container" class="w-full overflow-hidden flex justify-center py-1"></div>
+                </div>
+
+                <caption class="block text-left text-[11px] text-slate-400 bg-[#07090e]/60 p-2.5 rounded border border-[#21262d]/60 mt-3 leading-relaxed font-mono">
+                    <strong class="text-indigo-400">CAPTION:</strong> Compares how shaky or noisy a star's light is (left-to-right) against how deep its light dips are (bottom-to-top). Notice how confirmed exoplanet stars (indigo) stand out from normal stars.
+                </caption>
+            </section>
+
+            <!-- View 2: Bar Chart Instrument -->
+            <section class="instrument-panel rounded-lg p-5 shadow-2xl flex flex-col justify-between">
+                <div>
+                    <div class="flex justify-between items-baseline mb-1">
+                        <h3 class="text-xs font-mono uppercase tracking-wider text-slate-300 font-semibold">
+                            [View 02] Population Tier Breakdown
+                        </h3>
+                        <span class="text-[11px] font-mono text-slate-500">Categorical Aggregation</span>
+                    </div>
+                    <p class="text-xs text-slate-400 mb-3">
+                        Question: <em>How are star counts distributed across severity tiers of light-dimming?</em>
+                    </p>
+
+                    <div class="flex items-center justify-between bg-[#07090e] px-3 py-1.5 rounded border border-[#21262d] text-[11px] font-mono mb-2">
+                        <span class="text-slate-500">Click frequency bar to execute slice filter</span>
+                        <div class="flex items-center gap-3">
+                            <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded bg-slate-800 inline-block"></span> Total Population</span>
+                            <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded bg-indigo-500 inline-block"></span> Filtered Selection</span>
+                        </div>
+                    </div>
+
+                    <div id="barchart-container" class="w-full overflow-hidden flex justify-center py-1"></div>
+                </div>
+
+                <caption class="block text-left text-[11px] text-slate-400 bg-[#07090e]/60 p-2.5 rounded border border-[#21262d]/60 mt-3 leading-relaxed font-mono">
+                    <strong class="text-indigo-400">CAPTION:</strong> Summarizes how many stars fall into each category of starlight dimming. The glowing indigo bars show how your selected group from View 01 breaks down.
+                </caption>
+            </section>
+
+        </div>
+
+        <!-- Right Column: Details-on-Demand Inspector & Briefing (5 Cols) -->
+        <div class="lg:col-span-5 flex flex-col gap-6">
+            
+            <!-- View 3: Compact Light Curve Inspector -->
+            <section class="instrument-panel rounded-lg p-5 shadow-2xl flex flex-col justify-between">
+                <div>
+                    <div class="flex justify-between items-baseline mb-1">
+                        <h3 class="text-xs font-mono uppercase tracking-wider text-slate-300 font-semibold">
+                            [View 03] Light Curve Inspector
+                        </h3>
+                        <span class="text-[11px] font-mono text-slate-500">Time-Series Data</span>
+                    </div>
+                    <p class="text-xs text-slate-400 mb-3">
+                        Question: <em>What is the exact flux timeline profile for the selected target?</em>
+                    </p>
+                    
+                    <!-- Target Telemetry Metadata Card -->
+                    <div class="bg-[#07090e] border border-[#21262d] rounded p-2.5 mb-3 grid grid-cols-2 gap-2 text-xs font-mono text-slate-300">
+                        <div>ID: <span id="meta-id" class="text-white font-semibold">#0</span></div>
+                        <div>STATUS: <span id="meta-class" class="text-white font-semibold">-</span></div>
+                        <div>FLUX: <span id="meta-mean" class="text-white font-semibold">-</span></div>
+                        <div>SCORE: <span id="meta-dip" class="text-white font-semibold">-</span></div>
+                    </div>
+
+                    <div id="linechart-container" class="w-full overflow-hidden flex justify-center py-1"></div>
+                </div>
+
+                <caption class="block text-left text-[11px] text-slate-400 bg-[#07090e]/60 p-2.5 rounded border border-[#21262d]/60 mt-3 leading-relaxed font-mono">
+                    <strong class="text-indigo-400">CAPTION:</strong> Zooms in on a single star's timeline of brightness. When you select an exoplanet star, you can see the line dip downward like a valley when a planet passes in front of it.
+                </caption>
+            </section>
+
+            <!-- About Exoplanets Briefing Box -->
+            <section class="instrument-panel rounded-lg p-5 shadow-2xl">
+                <div class="flex items-center gap-2 mb-2">
+                    <span class="text-indigo-400 font-mono text-xs">//</span>
+                    <h3 class="text-xs font-mono uppercase tracking-wider text-slate-300 font-semibold">
+                        Astrophysics Briefing: The Transit Method
+                    </h3>
+                </div>
+                <p class="text-s text-slate-400 leading-relaxed font-sans">
+                    The <strong class="text-slate-200">Kepler Space Telescope</strong> monitors stellar brightness over time. When an exoplanet crosses directly between Earth and its host star, it creates a minuscule "shadow" that temporarily dips starlight intensity. By detecting these recurring periodic dips, astronomers confirm alien planetary systems without ever seeing them directly.
+                </p>
+            </section>
+
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-[#21262d] bg-[#07090e] px-8 py-4 text-center text-xs font-mono text-slate-500">
+        NASA Kepler Exoplanet Visual Analytics Framework // Full-Stack FastAPI + D3.js Implementation
+    </footer>
+
+    <!-- Tooltip -->
+    <div id="tooltip" class="tooltip opacity-0 transition-opacity duration-150"></div>
+
+    <!-- Script Logic -->
+    <script>
+        const API_BASE = "http://localhost:8000";
+
+        let globalState = {
+            allStars: [],
+            filteredStars: [],
+            selectedStarId: 0
+        };
+
+        const width = 430, height = 175; // Compact height for View 3
+        const margin = { top: 15, right: 25, bottom: 35, left: 52 };
+
+        async function initDashboard() {
+            try {
+                const res = await fetch(`${API_BASE}/api/stars/summary`);
+                const data = await res.json();
+                
+                globalState.allStars = data.stars;
+                globalState.filteredStars = data.stars;
+
+                const defaultExo = globalState.allStars.find(s => s.is_exoplanet) || globalState.allStars[0];
+                globalState.selectedStarId = defaultExo.star_id;
+
+                updateCounters();
+                renderScatterplot();
+                renderBarchart();
+                await fetchAndRenderLineChart(globalState.selectedStarId);
+
+                document.getElementById("reset-filter-btn").addEventListener("click", () => {
+                    globalState.filteredStars = globalState.allStars;
+                    updateCounters();
+                    renderScatterplot();
+                    renderBarchart();
+                });
+
+            } catch (err) {
+                console.error("Initialization error:", err);
+                alert("Could not connect to FastAPI backend. Ensure uvicorn is running on port 8000.");
+            }
+        }
+
+        function updateCounters() {
+            document.getElementById("active-count").innerText = globalState.filteredStars.length;
+            document.getElementById("total-count").innerText = globalState.allStars.length;
+        }
+
+        // VIEW 1: SCATTERPLOT
+        function renderScatterplot() {
+            const container = d3.select("#scatterplot-container");
+            container.html("");
+
+            const svg = container.append("svg").attr("width", width).attr("height", height);
+            const innerWidth = width - margin.left - margin.right;
+            const innerHeight = height - margin.top - margin.bottom;
+
+            const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+            const xScale = d3.scaleLinear()
+                .domain(d3.extent(globalState.allStars, d => d.noise_level))
+                .nice()
+                .range([0, innerWidth]);
+
+            const yScale = d3.scaleLinear()
+                .domain(d3.extent(globalState.allStars, d => d.transit_depth_score))
+                .nice()
+                .range([innerHeight, 0]);
+
+            g.append("g")
+                .attr("transform", `translate(0,${innerHeight})`)
+                .call(d3.axisBottom(xScale).ticks(5))
+                .attr("color", "#4b5563").attr("font-size", "10px").attr("font-family", "monospace");
+
+            g.append("g")
+                .call(d3.axisLeft(yScale).ticks(5))
+                .attr("color", "#4b5563").attr("font-size", "10px").attr("font-family", "monospace");
+
+            g.append("text").attr("x", innerWidth / 2).attr("y", innerHeight + 28)
+                .attr("fill", "#6b7280").attr("font-size", "10px").attr("font-family", "monospace").attr("text-anchor", "middle").text("Stellar Noise (σ)");
+
+            g.append("text").attr("transform", "rotate(-90)").attr("x", -innerHeight / 2).attr("y", -38)
+                .attr("fill", "#6b7280").attr("font-size", "10px").attr("font-family", "monospace").attr("text-anchor", "middle").text("Transit Dip Score");
+
+            const filteredIds = new Set(globalState.filteredStars.map(s => s.star_id));
+            const tooltip = d3.select("#tooltip");
+            const sortedStars = [...globalState.allStars].sort((a, b) => (a.is_exoplanet === b.is_exoplanet) ? 0 : a.is_exoplanet ? 1 : -1);
+
+            const brush = d3.brush()
+                .extent([[0, 0], [innerWidth, innerHeight]])
+                .on("end", (event) => {
+                    if (!event.selection) return;
+                    const [[x0, y0], [x1, y1]] = event.selection;
+                    const selected = globalState.allStars.filter(d => {
+                        const cx = xScale(d.noise_level);
+                        const cy = yScale(d.transit_depth_score);
+                        return cx >= x0 && cx <= x1 && cy >= y0 && cy <= y1;
+                    });
+                    if (selected.length > 0) {
+                        globalState.filteredStars = selected;
+                        updateCounters();
+                        renderBarchart();
+                        renderScatterplot();
+                    }
+                });
+
+            g.append("g").attr("class", "brush").call(brush);
+
+            g.selectAll("circle")
+                .data(sortedStars)
+                .join("circle")
+                .attr("cx", d => xScale(d.noise_level))
+                .attr("cy", d => yScale(d.transit_depth_score))
+                .attr("r", d => d.star_id === globalState.selectedStarId ? 6 : (d.is_exoplanet ? 4 : 2.2))
+                .attr("fill", d => d.is_exoplanet ? "#6366f1" : "#334155")
+                .attr("opacity", d => filteredIds.has(d.star_id) ? (d.star_id === globalState.selectedStarId ? 1 : (d.is_exoplanet ? 0.95 : 0.35)) : 0.08)
+                .attr("stroke", d => d.star_id === globalState.selectedStarId ? "#ffffff" : "none")
+                .attr("stroke-width", 1.5)
+                .style("cursor", "pointer")
+                .on("mouseover", (event, d) => {
+                    tooltip.transition().duration(100).style("opacity", 0.95);
+                    tooltip.html(`<strong>TARGET #${d.star_id}</strong><br/>Class: ${d.is_exoplanet ? 'Exoplanet Host' : 'Standard'}<br/>Noise: ${d.noise_level} σ<br/>Score: ${d.transit_depth_score}`)
+                        .style("left", Math.min(window.innerWidth - 180, event.pageX + 12) + "px")
+                        .style("top", (event.pageY - 28) + "px");
+                })
+                .on("mouseout", () => tooltip.transition().duration(200).style("opacity", 0))
+                .on("click", (event, d) => {
+                    globalState.selectedStarId = d.star_id;
+                    renderScatterplot();
+                    fetchAndRenderLineChart(d.star_id);
+                });
+        }
+
+        // VIEW 2: BAR CHART
+        function renderBarchart() {
+            const container = d3.select("#barchart-container");
+            container.html("");
+
+            const svg = container.append("svg").attr("width", width).attr("height", height);
+            const innerWidth = width - margin.left - margin.right;
+            const innerHeight = height - margin.top - margin.bottom;
+
+            const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+            const maxVal = d3.max(globalState.allStars, d => d.transit_depth_score) || 10;
+            const step = maxVal / 4;
+
+            const tiers = [
+                { label: `Low (<${step.toFixed(1)})`, min: 0, max: step },
+                { label: `Mild (${step.toFixed(1)}-${(step*2).toFixed(1)})`, min: step, max: step * 2 },
+                { label: `Mod (${(step*2).toFixed(1)}-${(step*3).toFixed(1)})`, min: step * 2, max: step * 3 },
+                { label: `Deep (>${(step*3).toFixed(1)})`, min: step * 3, max: 100 }
+            ];
+
+            const filteredIds = new Set(globalState.filteredStars.map(s => s.star_id));
+            const tierData = tiers.map(tier => {
+                const totalInTier = globalState.allStars.filter(d => d.transit_depth_score >= tier.min && d.transit_depth_score < tier.max);
+                const filteredInTier = totalInTier.filter(d => filteredIds.has(d.star_id));
+                return { ...tier, total: totalInTier.length, filtered: filteredInTier.length };
+            });
+
+            const xScale = d3.scaleBand().domain(tierData.map(d => d.label)).range([0, innerWidth]).padding(0.25);
+            const yScale = d3.scaleLinear().domain([0, d3.max(tierData, d => d.total) * 1.1 || 10]).nice().range([innerHeight, 0]);
+
+            g.append("g").attr("transform", `translate(0,${innerHeight})`).call(d3.axisBottom(xScale)).attr("color", "#4b5563").attr("font-size", "8.5px").attr("font-family", "monospace");
+            g.append("g").call(d3.axisLeft(yScale).ticks(5)).attr("color", "#4b5563").attr("font-size", "10px").attr("font-family", "monospace");
+            g.append("text").attr("transform", "rotate(-90)").attr("x", -innerHeight / 2).attr("y", -38).attr("fill", "#6b7280").attr("font-size", "10px").attr("font-family", "monospace").attr("text-anchor", "middle").text("Frequency Count");
+
+            g.selectAll(".bar-bg")
+                .data(tierData)
+                .join("rect")
+                .attr("class", "bar-bg")
+                .attr("x", d => xScale(d.label))
+                .attr("y", d => yScale(d.total))
+                .attr("width", xScale.bandwidth())
+                .attr("height", d => innerHeight - yScale(d.total))
+                .attr("fill", "#1e293b")
+                .attr("rx", 2)
+                .style("cursor", "pointer")
+                .on("click", (event, d) => {
+                    globalState.filteredStars = globalState.allStars.filter(s => s.transit_depth_score >= d.min && s.transit_depth_score < d.max);
+                    updateCounters();
+                    renderScatterplot();
+                    renderBarchart();
+                });
+
+            g.selectAll(".bar-fg")
+                .data(tierData)
+                .join("rect")
+                .attr("class", "bar-fg")
+                .attr("x", d => xScale(d.label))
+                .attr("y", d => yScale(d.filtered))
+                .attr("width", xScale.bandwidth())
+                .attr("height", d => innerHeight - yScale(d.filtered))
+                .attr("fill", "#6366f1")
+                .attr("rx", 2)
+                .style("pointer-events", "none");
+        }
+
+        // VIEW 3: COMPACT LINE CHART
+        async function fetchAndRenderLineChart(starId) {
+            try {
+                const res = await fetch(`${API_BASE}/api/stars/${starId}?downsample=4`);
+                const data = await res.json();
+                
+                updateMetaCard(data.metadata);
+
+                const container = d3.select("#linechart-container");
+                container.html("");
+
+                const svg = container.append("svg").attr("width", width).attr("height", height);
+                const innerWidth = width - margin.left - margin.right;
+                const innerHeight = height - margin.top - margin.bottom;
+
+                const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+                const timeSeries = data.time_series;
+
+                const xScale = d3.scaleLinear().domain(d3.extent(timeSeries, d => d.time)).range([0, innerWidth]);
+                const yScale = d3.scaleLinear().domain(d3.extent(timeSeries, d => d.flux)).nice().range([innerHeight, 0]);
+
+                g.append("g").attr("transform", `translate(0,${innerHeight})`).call(d3.axisBottom(xScale).ticks(5)).attr("color", "#4b5563").attr("font-size", "10px").attr("font-family", "monospace");
+                g.append("g").call(d3.axisLeft(yScale).ticks(5)).attr("color", "#4b5563").attr("font-size", "10px").attr("font-family", "monospace");
+
+                g.append("text").attr("x", innerWidth / 2).attr("y", innerHeight + 28).attr("fill", "#6b7280").attr("font-size", "10px").attr("font-family", "monospace").attr("text-anchor", "middle").text("Time Step Interval");
+                g.append("text").attr("transform", "rotate(-90)").attr("x", -innerHeight / 2).attr("y", -38).attr("fill", "#6b7280").attr("font-size", "10px").attr("font-family", "monospace").attr("text-anchor", "middle").text("Flux Intensity");
+
+                const line = d3.line().x(d => xScale(d.time)).y(d => yScale(d.flux));
+
+                g.append("path")
+                    .datum(timeSeries)
+                    .attr("fill", "none")
+                    .attr("stroke", data.metadata.is_exoplanet ? "#6366f1" : "#4b5563")
+                    .attr("stroke-width", 1.5)
+                    .attr("d", line);
+
+            } catch (err) {
+                console.error("Error loading time-series:", err);
+            }
+        }
+
+        function updateMetaCard(d) {
+            document.getElementById("meta-id").innerText = `#${d.star_id}`;
+            document.getElementById("meta-class").innerHTML = d.is_exoplanet ? '<span class="text-indigo-400 font-bold">Confirmed Exoplanet</span>' : '<span class="text-slate-400">Standard Star</span>';
+            document.getElementById("meta-mean").innerText = `${d.mean_flux} e-/s`;
+            document.getElementById("meta-dip").innerText = d.transit_depth_score;
+        }
+
+        window.addEventListener("DOMContentLoaded", initDashboard);
+    </script>
+</body>
+</html>
